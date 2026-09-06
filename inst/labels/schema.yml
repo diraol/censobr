@@ -20,7 +20,9 @@ level_required:
   - label
 rules:
   - Codes and labels are strings; quote codes such as "01" to preserve leading zeros.
-  - Variables may appear in only one mapping per configuration.
+  - A variables entry may be a source string or a source/target mapping with optional keep_source.
+  - Source and target variables may appear in only one mapping per configuration.
+  - A source/target mapping removes the source by default; set keep_source: true to retain it.
   - Codes may appear only once per mapping.
   - unmatched: null preserves case_when() behaviour for unknown values.
   - A string unmatched value labels every non-missing source value not listed in levels.

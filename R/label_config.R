@@ -19,6 +19,57 @@ label_config_abort <- function(path, message) {
 	cli::cli_abort("Invalid label configuration {.file {path}}: {message}")
 }
 
+label_variable_bindings <- function(variables, path = "<configuration>", prefix = "mapping") {
+	fail <- function(message) label_config_abort(path, message)
+	if (is.character(variables)) {
+		if (length(variables) == 0L || anyNA(variables) || any(!nzchar(variables)) ||
+				anyDuplicated(variables)) {
+			fail("{prefix} {.field variables} must be unique non-empty strings")
+		}
+		return(lapply(variables, function(variable) {
+			list(source = variable, target = variable, keep_source = TRUE)
+		}))
+	}
+
+	if (!is.list(variables) || length(variables) == 0L) {
+		fail("{prefix} {.field variables} must be strings or source/target mappings")
+	}
+	bindings <- lapply(seq_along(variables), function(index) {
+		binding <- variables[[index]]
+		binding_prefix <- paste0(prefix, " variable ", index)
+		if (!is.list(binding) || is.null(names(binding)) ||
+				!all(c("source", "target") %in% names(binding))) {
+			fail("{binding_prefix} must contain {.field source} and {.field target}")
+		}
+		unknown <- setdiff(names(binding), c("source", "target", "keep_source"))
+		if (length(unknown) > 0L) {
+			fail("{binding_prefix} has unsupported field{?s} {.field {unknown}}")
+		}
+		for (field in c("source", "target")) {
+			if (!is.character(binding[[field]]) || length(binding[[field]]) != 1L ||
+					is.na(binding[[field]]) || !nzchar(binding[[field]])) {
+				fail("{binding_prefix} {.field {field}} must be one non-empty string")
+			}
+		}
+		keep_source <- if ("keep_source" %in% names(binding)) binding$keep_source else FALSE
+		if (!is.logical(keep_source) || length(keep_source) != 1L || is.na(keep_source)) {
+			fail("{binding_prefix} {.field keep_source} must be true or false")
+		}
+		list(source = binding$source, target = binding$target, keep_source = keep_source)
+	})
+
+	sources <- vapply(bindings, `[[`, character(1), "source")
+	targets <- vapply(bindings, `[[`, character(1), "target")
+	if (anyDuplicated(sources)) { fail("{prefix} repeats a {.field source}") }
+	if (anyDuplicated(targets)) { fail("{prefix} repeats a {.field target}") }
+	for (index in seq_along(bindings)) {
+		if (bindings[[index]]$target %in% sources[-index]) {
+			fail("{prefix} {.field target} cannot be another binding's {.field source}")
+		}
+	}
+	bindings
+}
+
 validate_label_mapping <- function(mapping, path, prefix,
 											require_variables = TRUE) {
 	fail <- function(message) label_config_abort(path, message)
@@ -30,11 +81,7 @@ validate_label_mapping <- function(mapping, path, prefix,
 	if (length(absent) > 0L) { fail("{prefix} missing field{?s} {.field {absent}}") }
 
 	if ("variables" %in% names(mapping)) {
-		variables <- mapping$variables
-		if (!is.character(variables) || length(variables) == 0L || anyNA(variables) ||
-				any(!nzchar(variables)) || anyDuplicated(variables)) {
-			fail("{prefix} {.field variables} must be unique non-empty strings")
-		}
+		label_variable_bindings(mapping$variables, path, prefix)
 	}
 
 	if (!is.null(mapping$unmatched) &&
@@ -243,17 +290,25 @@ validate_label_config <- function(config, path = "<configuration>") {
 		fail("{.field mappings} must be a non-empty list")
 	}
 
-	variables_seen <- character()
+	sources_seen <- character()
+	targets_seen <- character()
 	for (index in seq_along(config$mappings)) {
 		mapping <- config$mappings[[index]]
 		prefix <- paste0("mapping ", index, "")
 		validate_label_mapping(mapping, path, prefix)
-		variables <- mapping$variables
-		duplicate_variables <- intersect(variables_seen, variables)
-		if (length(duplicate_variables) > 0L) {
-			fail("variable{?s} {.field {duplicate_variables}} appear in more than one mapping")
+		bindings <- label_variable_bindings(mapping$variables, path, prefix)
+		sources <- vapply(bindings, `[[`, character(1), "source")
+		targets <- vapply(bindings, `[[`, character(1), "target")
+		duplicate_sources <- intersect(sources_seen, sources)
+		if (length(duplicate_sources) > 0L) {
+			fail("source variable{?s} {.field {duplicate_sources}} appear in more than one mapping")
 		}
-		variables_seen <- c(variables_seen, variables)
+		duplicate_targets <- intersect(targets_seen, targets)
+		if (length(duplicate_targets) > 0L) {
+			fail("target variable{?s} {.field {duplicate_targets}} appear in more than one mapping")
+		}
+		sources_seen <- c(sources_seen, sources)
+		targets_seen <- c(targets_seen, targets)
 	}
 
 	invisible(config)
@@ -329,12 +384,20 @@ label_config_mutations <- function(config, columns) {
 	checkmate::assert_character(columns, any.missing = FALSE)
 
 	mutations <- list()
+	drop_sources <- character()
 	for (mapping in config$mappings) {
-		available <- intersect(mapping$variables, columns)
-		for (variable in available) {
-			mutations[[variable]] <- label_mapping_expression(variable, mapping)
+		for (binding in label_variable_bindings(mapping$variables)) {
+			if (!(binding$source %in% columns)) { next }
+			if (binding$target != binding$source && binding$target %in% columns) {
+				cli::cli_abort("Label target {.field {binding$target}} already exists in the data.")
+			}
+			mutations[[binding$target]] <- label_mapping_expression(binding$source, mapping)
+			if (binding$target != binding$source && !binding$keep_source) {
+				drop_sources <- c(drop_sources, binding$source)
+			}
 		}
 	}
+	attr(mutations, "drop_sources") <- unique(drop_sources)
 	mutations
 }
 
@@ -347,5 +410,10 @@ label_config_mutations <- function(config, columns) {
 apply_label_config <- function(arrw, config) {
 	mutations <- label_config_mutations(config, names(arrw))
 	if (length(mutations) == 0L) { return(arrw) }
-	dplyr::mutate(arrw, !!!mutations)
+	output <- dplyr::mutate(arrw, !!!mutations)
+	drop_sources <- attr(mutations, "drop_sources")
+	if (length(drop_sources) > 0L) {
+		output <- dplyr::select(output, -dplyr::all_of(drop_sources))
+	}
+	output
 }

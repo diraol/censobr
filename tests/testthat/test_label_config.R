@@ -50,7 +50,43 @@ test_that("apply_label_config generates character labels in one mutation", {
 	)
 	testthat::expect_identical(output$untouched, input$untouched)
 	testthat::expect_identical(vapply(output, typeof, character(1)),
-														 c(V0601 = "character", V0617 = "character", untouched = "integer"))
+										 c(V0601 = "character", V0617 = "character", untouched = "integer"))
+})
+
+test_that("apply_label_config supports source and target variable bindings", {
+	config <- list(
+		schema_version = 1L,
+		dataset = "population",
+		year = 2010,
+		language = "pt",
+		mappings = list(
+			list(
+				variables = list(list(source = "V0601", target = "sex")),
+				unmatched = NULL,
+				levels = list(
+					list(code = "1", label = "Masculino"),
+					list(code = "2", label = "Feminino")
+				)
+			),
+			list(
+				variables = list(list(source = "V0617", target = "moved", keep_source = TRUE)),
+				unmatched = "Não",
+				levels = list(list(code = "1", label = "Sim"))
+			)
+		)
+	)
+	input <- data.frame(V0601 = c("1", "9", NA_character_), V0617 = c("1", "0", NA_character_))
+
+	output <- censobr:::apply_label_config(input, config)
+
+	testthat::expect_false("V0601" %in% names(output))
+	testthat::expect_identical(output$sex, c("Masculino", NA_character_, NA_character_))
+	testthat::expect_identical(output$V0617, input$V0617)
+	testthat::expect_identical(output$moved, c("Sim", "Não", NA_character_))
+	testthat::expect_error(
+		censobr:::label_config_mutations(config, c("V0601", "sex")),
+		"already exists"
+	)
 })
 
 test_that("label_config_mutations only includes present columns", {
@@ -156,6 +192,30 @@ test_that("apply_label_config stays lazy for Arrow queries", {
 	)
 	testthat::expect_type(output$V0601, "character")
 	testthat::expect_type(output$V0617, "character")
+})
+
+test_that("renamed label targets stay lazy for Arrow queries", {
+	testthat::skip_if_not_installed("arrow")
+	config <- list(
+		schema_version = 1L,
+		dataset = "population",
+		year = 2010,
+		language = "pt",
+		mappings = list(list(
+			variables = list(list(source = "V0601", target = "sex")),
+			unmatched = NULL,
+			levels = list(list(code = "1", label = "Masculino"))
+		))
+	)
+	query <- censobr:::apply_label_config(
+		arrow::arrow_table(data.frame(V0601 = c("1", "9"), untouched = 1:2)),
+		config
+	)
+	output <- dplyr::collect(query)
+
+	testthat::expect_s3_class(query, "arrow_dplyr_query")
+	testthat::expect_false("V0601" %in% names(output))
+	testthat::expect_identical(output$sex, c("Masculino", NA_character_))
 })
 
 test_that("population pilot configuration preserves published labels", {

@@ -147,7 +147,9 @@ label_import_path <- function(import, path, root) {
 		candidate <- if (identical(part, "..")) dirname(candidate) else file.path(candidate, part)
 	}
 	candidate <- normalizePath(candidate, mustWork = FALSE)
-	root_prefix <- paste0(root, .Platform$file.sep)
+	# `root` and `candidate` are both normalizePath()'d, which uses `\` on Windows;
+	# `.Platform$file.sep` is always `/`, so it can't be used to build the prefix here.
+	root_prefix <- paste0(root, if (identical(.Platform$OS.type, "windows")) "\\" else "/")
 	if (!identical(candidate, root) && !startsWith(candidate, root_prefix)) {
 		label_config_abort(path, "import {.val {import}} is outside the label root")
 	}

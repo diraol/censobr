@@ -270,7 +270,7 @@ add_labels_families <- function(arrw,
   if(year == 2000 & lang == 'pt'){ # nocov start
     config <- load_label_config(dataset = "families", year = year, lang = lang)
     arrw <- apply_label_config(arrw, config)
-  }
+  } # nocov end
 
   return(arrw)
 }

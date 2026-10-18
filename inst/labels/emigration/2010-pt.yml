@@ -331,8 +331,10 @@ mappings:
         label: "Croácia"
       - code: "8000208"
         label: "Dinamarca"
+      # IBGE lists 8000826 under five names (Escócia, Inglaterra, Irlanda do
+      # Norte, País de Gales, Reino Unido); the package labels it Reino Unido.
       - code: "8000826"
-        label: "Escócia"
+        label: "Reino Unido"
       - code: "8000703"
         label: "Eslováquia"
       - code: "8000705"

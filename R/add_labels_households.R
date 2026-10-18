@@ -33,7 +33,7 @@ add_labels_households <- function(
   if (( year == 2000 || year == 2010 ) & lang == "pt") {
     config <- load_label_config(dataset = "households", year = year, lang = lang)
     arrw <- apply_label_config(arrw, config)
-  }
+  } # nocov end
 
   # YEAR 2022 ------------------------------------------------------------------
   if (year == 2022 & lang == 'pt') {

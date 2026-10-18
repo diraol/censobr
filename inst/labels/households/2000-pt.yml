@@ -118,14 +118,15 @@ mappings:
       - {code: "5", label: "Jogado em terreno baldio ou logradouro"}
       - {code: "6", label: "Jogado em rio, lago ou mar"}
       - {code: "7", label: "Tem outro destino"}
-  - variables: [V1113]
+  # the 2000 file stores these three columns in lower case
+  - variables: [v1113]
     unmatched: null
     levels:
       - {code: "1", label: "Total"}
       - {code: "2", label: "Parcial"}
       - {code: "3", label: "Não Existe"}
       - {code: "9", label: "Ignorado"}
-  - variables: [V1111, V1112]
+  - variables: [v1111, v1112]
     unmatched: null
     levels:
       - {code: "1", label: "Sim"}

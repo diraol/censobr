@@ -115,7 +115,7 @@ test_that("2022 add_labels_households", {
 test_that("household yes/no mappings preserve legacy defaults", {
   input_2000 <- arrow::arrow_table(data.frame(
     V0210 = c("1", "2", NA_character_),
-    V1112 = c("1", "9", NA_character_)
+    V0213 = c("1", "9", NA_character_)
   ))
   output_2000 <- censobr:::add_labels_households(input_2000, year = 2000, lang = "pt") |>
     dplyr::collect()
@@ -128,7 +128,7 @@ test_that("household yes/no mappings preserve legacy defaults", {
     dplyr::collect()
 
   testthat::expect_identical(output_2000$V0210, c("Sim", "Não", NA_character_))
-  testthat::expect_identical(output_2000$V1112, c("Sim", "Não", NA_character_))
+  testthat::expect_identical(output_2000$V0213, c("Sim", "Não", NA_character_))
   testthat::expect_identical(output_2010$V0206, c("Sim", "Não", NA_character_))
   testthat::expect_identical(output_2010$V0701, c("Sim", "Não", NA_character_))
 })

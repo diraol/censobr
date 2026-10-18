@@ -55,7 +55,7 @@ test_that("emigration YAML labels preserve mapped and unmatched values", {
   testthat::expect_equal(output$V1006, c("Rural", NA_character_, NA_character_))
   testthat::expect_equal(output$V0303, c("Ignorado", NA_character_, NA_character_))
   testthat::expect_equal(output$V1005, c("Área rural exclusive aglomerado rural", NA_character_, NA_character_))
-  testthat::expect_equal(output$V3061, c("África do SUL", "Escócia", NA_character_))
+  testthat::expect_equal(output$V3061, c("África do SUL", "Reino Unido", NA_character_))
 })
 
 

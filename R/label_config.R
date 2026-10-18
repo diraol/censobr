@@ -344,11 +344,22 @@ load_label_config <- function(dataset, year, lang = "pt",
 
 #' Build a case_when expression for one configured variable
 #'
+#' @param variable Column name.
+#' @param mapping A validated label mapping.
+#' @param text_columns Names of columns stored as text. Defaults to treating
+#'   `variable` as text.
 #' @keywords internal
-label_mapping_expression <- function(variable, mapping) {
+label_mapping_expression <- function(variable, mapping, text_columns = variable) {
 	column <- rlang::sym(variable)
 	clauses <- lapply(mapping$levels, function(level) {
-		rlang::expr(!!column == !!level$code ~ !!level$label)
+		# Census columns are integer-typed in the parquet files and Arrow has no
+		# kernel to compare int32 with a string, so numeric columns are matched
+		# against numeric codes. Text columns keep exact string matching.
+		if (!(variable %in% text_columns) && grepl("^[0-9]+$", level$code)) {
+			rlang::expr(!!column == !!as.integer(level$code) ~ !!level$label)
+		} else {
+			rlang::expr(!!column == !!level$code ~ !!level$label)
+		}
 	})
 
 	# `unmatched: null` is equivalent to the current case_when() calls without
@@ -367,8 +378,10 @@ label_mapping_expression <- function(variable, mapping) {
 #'
 #' @param config A validated label configuration.
 #' @param columns Character vector of columns available in the data.
+#' @param text_columns Subset of `columns` stored as text; the others are
+#'   compared with numeric codes.
 #' @keywords internal
-label_config_mutations <- function(config, columns) {
+label_config_mutations <- function(config, columns, text_columns = columns) {
 	validate_label_config(config)
 	checkmate::assert_character(columns, any.missing = FALSE)
 
@@ -376,7 +389,7 @@ label_config_mutations <- function(config, columns) {
 	for (mapping in config$mappings) {
 		for (specification in label_variable_specs(mapping$variables)) {
 			if (!(specification$name %in% columns)) { next }
-			mutations[[specification$name]] <- label_mapping_expression(specification$name, mapping)
+			mutations[[specification$name]] <- label_mapping_expression(specification$name, mapping, text_columns)
 		}
 	}
 	mutations
@@ -418,6 +431,21 @@ label_variable_metadata <- function(dataset, year, lang = "pt",
 	label_config_variable_metadata(load_label_config(dataset, year, lang, root))
 }
 
+#' Names of the text-typed columns of a data frame or Arrow object
+#'
+#' @param arrw An Arrow dplyr query, Arrow table, dataset, or data frame.
+#' @keywords internal
+label_text_columns <- function(arrw) {
+	if (is.data.frame(arrw)) {
+		return(names(arrw)[vapply(arrw, function(x) is.character(x) || is.factor(x), logical(1))])
+	}
+	schema <- arrow::schema(arrw)
+	is_text <- vapply(schema$fields, function(field) {
+		field$type$ToString() %in% c("string", "large_string")
+	}, logical(1))
+	names(schema)[is_text]
+}
+
 #' Apply configured categorical labels in one dplyr mutation
 #'
 #' @param arrw An Arrow dplyr query, Arrow table, or data frame.
@@ -425,7 +453,7 @@ label_variable_metadata <- function(dataset, year, lang = "pt",
 #' @return `arrw` with configured columns replaced by character labels.
 #' @keywords internal
 apply_label_config <- function(arrw, config) {
-	mutations <- label_config_mutations(config, names(arrw))
+	mutations <- label_config_mutations(config, names(arrw), label_text_columns(arrw))
 	if (length(mutations) == 0L) { return(arrw) }
 	dplyr::mutate(arrw, !!!mutations)
 }

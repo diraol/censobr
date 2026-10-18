@@ -29,6 +29,7 @@ mappings:
       - {code: "62", label: "Hotel, pensão e similares com morador"}
       - {code: "63", label: "Alojamento de trabalhadores com morador"}
       - {code: "64", label: "Penitenciária, presídio ou casa de detenção com morador"}
+      - {code: "65", label: "Outro com morador"}
   - variables: [V0201]
     unmatched: null
     levels:
